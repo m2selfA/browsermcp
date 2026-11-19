@@ -162,7 +162,13 @@ export class FakeChromium {
       this.process.kill();
       await exited;
     }
-    rmSync(this.userDataDir, { recursive: true, force: true });
+    // Windows can keep profile files open briefly after Chromium's main process exits.
+    rmSync(this.userDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 100,
+    });
   }
 }
 
@@ -199,6 +205,8 @@ export type FakeExtensionOptions = {
   windowId?: number;
   /** `state.label`, the name the user gave the profile */
   label?: string;
+  /** Optional profile purpose, omitted by older peers. */
+  description?: string;
 };
 
 /**
@@ -228,6 +236,7 @@ export class FakeExtension {
   code: string | null = null;
   /** `state.label` */
   label: string | undefined;
+  description: string | undefined;
   /** `state.lastFocusedAt`, set by `focus()` */
   lastFocusedAt: number | undefined;
   private windowId = 1;
@@ -276,6 +285,7 @@ export class FakeExtension {
     extension.port = options.port;
     extension.windowId = options.windowId ?? 1;
     extension.label = options.label;
+    extension.description = options.description;
     extension.stateDelayMs = options.stateDelayMs ?? 10;
     await new Promise((resolve, reject) => {
       ws.once("open", resolve);
@@ -322,6 +332,7 @@ export class FakeExtension {
       state: {
         ...extension.state(),
         label: undefined,
+        description: undefined,
         lastFocusedAt: undefined,
       },
     });
@@ -405,6 +416,11 @@ export class FakeExtension {
     this.sendState();
   }
 
+  setDescription(description: string | undefined) {
+    this.description = description;
+    this.sendState();
+  }
+
   /** A window of this browser gains focus (`state.lastFocusedAt`) */
   focus() {
     this.lastFocusedAt = Date.now();
@@ -478,6 +494,7 @@ export class FakeExtension {
       paused: this.paused,
       pairing: this.pairing,
       ...(this.label ? { label: this.label } : {}),
+      ...(this.description ? { description: this.description } : {}),
       ...(this.lastFocusedAt ? { lastFocusedAt: this.lastFocusedAt } : {}),
     };
   }

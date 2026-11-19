@@ -3,9 +3,9 @@
 Browser MCP's open-source core: the MCP server and the extension's browser control, which AI apps use to drive the user's own Chrome. See `README.md` for how the parts fit together.
 
 - `packages/protocol` (`@browsermcp/protocol`): the protocol between the extension and the daemon (frames, pairing, ports, close codes), and the extension IDs the daemon accepts.
-- `packages/mcp` (`@browsermcp/mcp`): the MCP server, published to npm: the thin process each AI app runs, the daemon and its command engine. Read its `AGENTS.md` before changing it.
+- `packages/mcp` (`@browsermcp/mcp`): the locally built MCP server: the thin process each AI app runs, the daemon and its command engine. This fork keeps the upstream package name but marks it private; upstream publishes its own npm release. Read its `AGENTS.md` before changing it.
 - `packages/extension-core` (`@browsermcp/extension-core`): browser control for a Chromium extension's background (`addBrowserControl()`, `handleBrowserControlMessages()`), a content script (`@browsermcp/extension-core/content`: `handleFrameRemovalRequests()`, which the extension declares in its manifest for `<all_urls>` in all frames, so it can remove other extensions' frames that block attaching, idle until the background asks) and popup (`@browsermcp/extension-core/popup`: `useBrowserControl()`, `sendBrowserControlMessage()`). It's source, not built: extensions bundle it.
-- `apps/extension` (`@browsermcp/extension`): the extension people build from this repo, "Browser MCP (self-built)": `extension-core` and a popup, in English. Its manifest's fixed `key` (`extension-key.ts`) gives every build the ID `SELF_BUILT_EXTENSION_ID`, which the daemon accepts.
+- `apps/extension` (`@browsermcp/extension`): the extension people build from this repo, "Profile Browser MCP (self-built)": `extension-core` and a popup, in English. Its manifest's fixed `key` (`extension-key.ts`) gives every build the ID `SELF_BUILT_EXTENSION_ID`, which the daemon accepts.
 
 ## Conventions
 
@@ -20,5 +20,5 @@ Browser MCP's open-source core: the MCP server and the extension's browser contr
 ## Commands
 
 - `pnpm build`, `pnpm typecheck`, `pnpm test`: every package.
-- `pnpm lint`, `pnpm format`: in the public repo, Oxlint and Oxfmt with `public-root/.oxlintrc.json` and `.oxfmtrc.json` (its root files). In the private monorepo the root's configs lint and format `oss/` instead, so keep the two alike (`pnpm oss:export --check` runs the public ones on an export). `.github/workflows/ci.yml` runs all of these in the public repo.
+- `pnpm lint`, `pnpm format`: Oxlint and Oxfmt with this repository's root `.oxlintrc.json` and `.oxfmtrc.json`. `.github/workflows/ci.yml` runs the checks for pushes to `main` and pull requests.
 - `pnpm smoke`: the end-to-end smoke test (`apps/extension/scripts/smoke-browser-control.ts`), which builds the extension in development mode and the server, and drives the extension through the server in headless Chromium. Run it after changing browser control, the protocol or the daemon. `--extension <dir>` runs it against another development build (production builds ignore the fake 0.1.x server's port).

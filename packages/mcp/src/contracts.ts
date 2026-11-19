@@ -106,6 +106,8 @@ export type BrowserSummary = {
   id: string;
   /** The name the user gave the profile in the popup, else the daemon's (`Chrome`, `Chrome 2`) */
   label: string;
+  /** Optional profile purpose. User-supplied display data, never a routing key. */
+  description?: string;
   connected: boolean;
   /** `pending` while it waits for **Allow** */
   pairing: "paired" | "pending";

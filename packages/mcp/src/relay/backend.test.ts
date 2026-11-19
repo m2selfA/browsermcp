@@ -478,6 +478,46 @@ describe("RelayBackend with several browsers", () => {
     await waitUntil(() => labels()[0] === "Chrome");
   });
 
+  it("keeps each profile's bounded purpose, refreshes it on reconnect, and tolerates old peers", async () => {
+    const browserId = createBrowserId();
+    const { first, second } = await connectTwo({
+      second: { browserId, description: "  QA\n staging  " },
+    });
+    const profiles = () => relay.backend.browsers();
+    await waitUntil(() => profiles()[1]!.description === "QA staging");
+    expect(profiles()[0]).not.toHaveProperty("description");
+    first.setDescription("文献检索");
+    await waitUntil(() => profiles()[0]!.description === "文献检索");
+    expect(profiles()[1]!.description).toBe("QA staging");
+    second.setDescription("😀".repeat(501));
+    await waitUntil(() => profiles()[1]!.description === "😀".repeat(500));
+    second.setDescription(42 as unknown as string);
+    await waitUntil(() => profiles()[1]!.description === undefined);
+    second.setDescription("QA only");
+    await waitUntil(() => profiles()[1]!.description === "QA only");
+    await second.disconnect();
+    await waitUntil(() => !profiles()[1]!.connected);
+    expect(profiles()[1]!.description).toBe("QA only");
+    // An older extension reconnects without the optional field: do not keep stale purpose.
+    await connect({ chromium: chromium2, windowId: 7, browserId });
+    await waitUntil(() => profiles()[1]!.usable);
+    expect(profiles()).toHaveLength(2);
+    expect(profiles()[1]).not.toHaveProperty("description");
+    expect(profiles()[0]!.description).toBe("文献检索");
+  });
+
+  it("does not expose a description before its browser is paired", async () => {
+    const pending = await connect({
+      pairing: "pending",
+      description: "Private account",
+    });
+    expect(relay.backend.browsers()[0]).not.toHaveProperty("description");
+    pending.allow();
+    await waitUntil(
+      () => relay.backend.browsers()[0]!.description === "Private account",
+    );
+  });
+
   it("refuses one browser more than the most it connects", async () => {
     await relay.close();
     relay = await startTestBackend({ maxBrowsers: 2 });

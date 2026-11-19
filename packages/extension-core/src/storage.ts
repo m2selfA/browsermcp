@@ -73,6 +73,12 @@ export const browserLabelItem = storage.defineItem<string | null>(
   { fallback: null },
 );
 
+/** The profile's optional purpose, local to this profile and kept across browser restarts. */
+export const browserDescriptionItem = storage.defineItem<string | null>(
+  "local:browserDescription",
+  { fallback: null },
+);
+
 /** When a window of this profile last gained focus (`ExtensionState.lastFocusedAt`), so a service worker restart keeps it */
 export const lastFocusedAtItem = storage.defineItem<number | null>(
   "session:browserControlLastFocusedAt",

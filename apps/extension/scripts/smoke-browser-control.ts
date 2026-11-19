@@ -588,6 +588,10 @@ get text #out`,
     const pid = daemonPid(home);
     process.kill(pid, "SIGKILL");
     await waitFor("the daemon to exit", async () => !isRunning(pid));
+    // Process exit can precede the thin process observing the socket close (notably on Windows).
+    // Only a read-only discovery call is retried; never replay an interrupted navigation.
+    const reconnected = await retryCall(alpha, "browser list", 15_000);
+    expect(!reconnected.isError, reconnected.text);
     const result = await call(
       alpha,
       `goto ${fixtures.url("/second")}\nget title`,
@@ -631,6 +635,9 @@ get text #out`,
   await section(
     "a second Chrome profile: tab list shows both, tab select across them",
     async () => {
+      const firstPopup = await openPopup();
+      await saveProfileMetadata(firstPopup, "Research", "University papers");
+      await firstPopup.close();
       const firstTab = await currentTabId(alpha);
       const second = await launchChromium("profile-2");
       // Killed once, so a later kill can't hit a process that reused its PID
@@ -660,7 +667,13 @@ get text #out`,
         );
         // This profile hasn't paired with the daemon: it waits for Allow, without stopping agents in the first
         const popup = await openPopup({ context: secondContext });
+        await saveProfileMetadata(popup, "QA", "QA staging account");
         await popup.getByText(/^Code: /).waitFor({ timeout: 20_000 });
+        const pendingProfiles = await call(alpha, "browser list");
+        expect(
+          !pendingProfiles.text.includes("QA staging account"),
+          pendingProfiles.text,
+        );
         const meanwhile = await call(alpha, "get url");
         expect(!meanwhile.isError, meanwhile.text);
         await popup.getByRole("button", { name: "Allow", exact: true }).click();
@@ -710,6 +723,28 @@ get text #out`,
         expect(!back.isError, back.text);
         const browsers = await call(alpha, "browser list");
         expect(
+          browsers.text.includes('purpose: "University papers"'),
+          browsers.text,
+        );
+        expect(
+          browsers.text.includes('purpose: "QA staging account"'),
+          browsers.text,
+        );
+        // Independent MCP sessions operate in both real extension profiles concurrently.
+        const [researchRead, qaRead] = await Promise.all([
+          call(alpha, "get url", false),
+          call(
+            beta,
+            `tab new ${fixtures.url("/second?parallel=qa")} --browser QA\nget title`,
+            false,
+          ),
+        ]);
+        expect(!researchRead.isError, researchRead.text);
+        expect(
+          !qaRead.isError && qaRead.text.includes("Second page"),
+          qaRead.text,
+        );
+        expect(
           browsers.text.includes(`"${firstLabel}"`) &&
             browsers.text.includes(`"${secondLabel}"`),
           browsers.text,
@@ -731,6 +766,68 @@ get text #out`,
       }
     },
   );
+
+  await section("profile purpose survives a full browser restart", async () => {
+    const restarted = await launchChromium("profile-2");
+    let closed = false;
+    cleanups.push(() => {
+      if (!closed) killPid(restarted.pid);
+    });
+    const restartedBrowser = await chromium.connectOverCDP(
+      restarted.wsEndpoint,
+      { noDefaults: true },
+    );
+    try {
+      const restartedContext = restartedBrowser.contexts()[0]!;
+      const popup = await openPopup({ context: restartedContext });
+      await popup
+        .getByText(/^Connected/)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await popup
+        .getByRole("button", { name: "Settings", exact: true })
+        .click();
+      expect(
+        (await popup
+          .getByLabel("Browser name", { exact: true })
+          .inputValue()) === "QA",
+        "profile name persisted",
+      );
+      expect(
+        (await popup
+          .getByLabel("Profile description", { exact: true })
+          .inputValue()) === "QA staging account",
+        "profile description persisted",
+      );
+      await shot(popup, "profile-description-persisted");
+      const profiles = await retryCall(
+        alpha,
+        "browser list",
+        15_000,
+        (r) =>
+          r.text.includes('"QA"') &&
+          r.text.includes('purpose: "QA staging account"') &&
+          !r.text
+            .split("\n")
+            .some((l) => l.includes('"QA"') && l.includes("disconnected")),
+      );
+      expect(
+        !profiles.isError &&
+          profiles.text.includes('purpose: "QA staging account"') &&
+          !profiles.text
+            .split("\n")
+            .some(
+              (line) => line.includes('"QA"') && line.includes("disconnected"),
+            ),
+        profiles.text,
+      );
+      await popup.close();
+    } finally {
+      await restartedBrowser.close().catch(() => {});
+      killPid(restarted.pid);
+      closed = true;
+    }
+  });
 
   await section("a different daemon key asks again", async () => {
     await alpha.close();
@@ -1108,6 +1205,45 @@ async function activateTab(tabId: number) {
 }
 
 /** Opens the popup's page in a tab of its own. With `besideTab`, in a window of its own, then makes that tab's window the focused one, so the popup acts on it */
+/** Edits metadata through the actual popup and verifies profile-local storage. */
+async function saveProfileMetadata(
+  popup: Page,
+  label: string,
+  description: string,
+) {
+  await popup.getByRole("button", { name: "Settings", exact: true }).click();
+  const nameField = popup.getByLabel("Browser name", { exact: true });
+  await nameField.fill(label);
+  await popup
+    .locator("form")
+    .filter({ has: nameField })
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
+  const descriptionField = popup.getByLabel("Profile description", {
+    exact: true,
+  });
+  await descriptionField.fill(description);
+  await popup
+    .locator("form")
+    .filter({ has: descriptionField })
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
+  await waitFor("profile metadata saved", async () => {
+    const saved = await inWorker(
+      async () => {
+        const { chrome } = globalThis as unknown as { chrome: Chrome };
+        return chrome.storage.local.get(["browserLabel", "browserDescription"]);
+      },
+      undefined,
+      popup.context(),
+    );
+    return (
+      saved.browserLabel === label && saved.browserDescription === description
+    );
+  });
+  await popup.getByRole("button", { name: "Back", exact: true }).click();
+}
+
 async function openPopup(
   options: { besideTab?: number; context?: typeof context } = {},
 ): Promise<Page> {

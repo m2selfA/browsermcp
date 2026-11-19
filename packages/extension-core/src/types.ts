@@ -84,5 +84,7 @@ export type BrowserControlView = {
   relayPort: number | null;
   /** The name the user gave this browser profile (`ExtensionState.label`), or `null` */
   label: string | null;
+  /** The optional purpose the user gave this profile, or `null`. */
+  description: string | null;
   apps: BrowserControlApp[];
 };

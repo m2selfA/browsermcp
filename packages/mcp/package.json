@@ -1,6 +1,7 @@
 {
   "name": "@browsermcp/mcp",
-  "version": "2.5.0",
+  "version": "2.5.1-profile.1",
+  "private": true,
   "description": "MCP server for browser automation using Browser MCP",
   "author": "Browser MCP",
   "license": "Apache-2.0",

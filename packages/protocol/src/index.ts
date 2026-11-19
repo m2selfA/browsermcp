@@ -16,6 +16,25 @@
  */
 import type { Protocol } from "devtools-protocol/types/protocol";
 
+/** Maximum profile-purpose length in Unicode code points, shared by extension and daemon. */
+export const MAX_BROWSER_DESCRIPTION_LENGTH = 500;
+
+/** Optional display data, never a selector. Keep it on one line and tolerate older or malformed peers. */
+export function normalizeBrowserDescription(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value
+    .replace(/\s+/gu, " ")
+    .replace(/\p{Cc}/gu, "")
+    .replace(/[\u202a-\u202e\u2066-\u2069]/gu, "")
+    .trim();
+  return (
+    Array.from(text)
+      .slice(0, MAX_BROWSER_DESCRIPTION_LENGTH)
+      .join("")
+      .trimEnd() || null
+  );
+}
+
 /** Bumped on breaking changes. Each side states the versions it supports, so later releases can stay compatible */
 export const RELAY_PROTOCOL_VERSION = 1;
 
@@ -230,8 +249,10 @@ export type ExtensionState = {
   paused: boolean;
   /** `pending` until the user clicks **Allow** for this daemon's key; `tabs` is empty and every request fails meanwhile */
   pairing: "paired" | "pending";
-  /** The name the user gave this browser profile in the popup's settings, e.g. `Work`. Absent until they set one, when the daemon names it after `BrowserInfo.name` (`Chrome 2`). Agents see it only while several browsers are connected. Like `tabs`, only sent once paired: never in `hello`'s state, so a program on the port can't read it */
+  /** The name the user gave this browser profile in the popup's settings, e.g. `Work`. Absent until they set one, when the daemon names it after `BrowserInfo.name` (`Chrome 2`). Agents read it from `browser list`; tab output names each browser while several are connected. Like `tabs`, only sent once paired: never in `hello`'s state, so a program on the port can't read it */
   label?: string;
+  /** Optional user-written purpose of this profile. Normalized and bounded by `normalizeBrowserDescription()`. Display data, never used to route commands. Like `label`, only sent after pairing, never in `hello`. Older peers omit or ignore it, so protocol version 1 stays compatible. */
+  description?: string;
   /** When a normal window of this browser profile last gained focus (`chrome.windows.onFocusChanged`, ms since the epoch), so the daemon opens agents' new tabs in the browser the user used last. Absent until one has. Only sent once paired, like `label` */
   lastFocusedAt?: number;
 };

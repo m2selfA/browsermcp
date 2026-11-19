@@ -1,4 +1,4 @@
-export const APP_NAME = "Browser MCP";
+export const APP_NAME = "Profile Browser MCP";
 
 /** The docs: setting up the server in each AI app, the `browser` tool, troubleshooting */
 export const DOCS_URL = "https://browsermcp.io/docs";

@@ -46,6 +46,8 @@ export class BrowserSlot {
   unconfirmed = false;
   /** The label the user gave it (`state.label`), kept while it's away */
   userLabel: string | undefined;
+  /** Optional user-written profile purpose, kept while disconnected and refreshed by paired state. */
+  description: string | undefined;
   lastFocusedAt: number | undefined;
   connectedAt = 0;
   /** When it last disconnected, so calls wait briefly for it to come back */

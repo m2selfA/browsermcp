@@ -136,9 +136,15 @@ describe("the thin process's MCP server", () => {
     });
   });
 
-  it("resolves relative file paths against a root of / too", async () => {
-    const { run } = await connect({ roots: ["/"] });
-    expect((await run("read etc/hosts")).text).toContain("hosts ");
+  it("resolves relative paths against a filesystem root on every platform", async () => {
+    const file = path.join(root, "root-probe.txt");
+    writeFileSync(file, "root fixture");
+    const filesystemRoot = path.parse(root).root;
+    const { run } = await connect({ roots: [filesystemRoot] });
+    expect(await run(`read ${path.relative(filesystemRoot, file)}`)).toEqual({
+      text: "root-probe.txt text/plain root fixture",
+      isError: false,
+    });
   });
 });
 

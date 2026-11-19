@@ -15,6 +15,7 @@ const EVERYDAY = [
   'select <target> "<value>"',
   "check <target> | uncheck <target>",
   'wait <ms> | wait --text "<text>" | wait <target>',
+  "browser list | browser use <id>   # profile names & purposes",
   "tab list | tab new [<url>] | tab select <id> | tab close",
   "snapshot [<target>] [-i] [--depth N]",
   'find "<text>"',

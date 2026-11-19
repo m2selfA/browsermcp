@@ -1055,10 +1055,20 @@ describe("idle release", () => {
     const idle = await startHarness({ idleReleaseMs: 300 });
     try {
       const s = idle.openSession();
-      await idle.run(s, `goto ${idle.fixtures.url("/misc")}`);
-      const tabId = Number(/\* (\d+)/.exec(await idle.run(s, "tab list"))?.[1]);
+      // Establish a fresh claimed read after navigation/setup, then measure the idle window.
+      const initial = await idle.call(
+        s,
+        `goto ${idle.fixtures.url("/misc")}\nget title`,
+      );
+      expect(initial.isError, initial.text).toBe(false);
+      // Inspect synchronously: an extra tab-list round trip can itself outlast the 300 ms idle window.
+      const tabId = idle.backend
+        .tabs()
+        .find((tab) => tab.url === idle.fixtures.url("/misc"))!.tabId;
       expect(idle.backend.isClaimed(tabId)).toBe(true);
-      await new Promise((r) => setTimeout(r, 700));
+      await vi.waitUntil(() => !idle.backend.isClaimed(tabId), {
+        timeout: 3000,
+      });
       expect(idle.backend.isClaimed(tabId)).toBe(false);
       expect(await idle.run(s, "get title")).toContain("Misc");
       expect(idle.backend.isClaimed(tabId)).toBe(true);

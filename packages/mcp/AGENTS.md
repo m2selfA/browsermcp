@@ -1,6 +1,6 @@
 # AGENTS.md (`@browsermcp/mcp`)
 
-`@browsermcp/mcp`, published to npm and bundled with tsup. See the README for the architecture.
+`@browsermcp/mcp`, bundled locally with tsup. This fork retains the upstream workspace name and marks the package private; the upstream npm release does not include this fork's profile-purpose feature. See the README for the architecture.
 
 ## Layers
 

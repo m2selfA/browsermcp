@@ -10,6 +10,7 @@ import {
   RelayUpdateReason,
   isValidBrowserId,
   pairingRequiredMessage,
+  normalizeBrowserDescription,
 } from "@browsermcp/protocol";
 
 import type {
@@ -294,6 +295,8 @@ export class RelayBackend implements BrowserBackend {
     }
     // Only a paired state carries them (never `hello`'s), so one without a label means the user cleared it
     slot.userLabel = state.label?.trim() || undefined;
+    slot.description =
+      normalizeBrowserDescription(state.description) ?? undefined;
     slot.lastFocusedAt = state.lastFocusedAt ?? slot.lastFocusedAt;
     if (state.tabs.length > 0) {
       slot.windowIds = new Set(state.tabs.map((tab) => tab.windowId));
@@ -460,6 +463,8 @@ export class RelayBackend implements BrowserBackend {
     return this.slots.map((slot) => ({
       id: slot.id,
       label: slot.label,
+      ...(!slot.unconfirmed &&
+        slot.description && { description: slot.description }),
       connected: !!slot.connection,
       pairing: slot.connection?.state.pairing ?? "pending",
       paused: slot.connection?.state.paused ?? false,

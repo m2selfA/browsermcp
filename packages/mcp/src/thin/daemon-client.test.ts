@@ -4,7 +4,15 @@ import http from "node:http";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, inject, it } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  inject,
+  it,
+  vi,
+} from "vitest";
 import { WebSocketServer } from "ws";
 
 import { fetchStatus, readDaemonInfo, writeDaemonInfo } from "@/daemon/info";
@@ -170,12 +178,15 @@ describe("DaemonClient", () => {
   it("starts a new daemon on the next call after the daemon is killed mid-session", async () => {
     const thin = client();
     const first = await daemonPid(thin);
+    const peer = await thin.connect();
     process.kill(first, "SIGKILL");
     // daemon.json still names the dead daemon; the status check finds it gone
     const deadline = Date.now() + 5000;
     while ((await fetchStatus(port, 200)) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
+    // Process/status exit may precede this client's socket-close notification.
+    await vi.waitUntil(() => !peer.open, { timeout: 5000 });
     const second = await daemonPid(thin);
     expect(second).not.toBe(first);
     expect(await run(thin, "echo back")).toBe("back");

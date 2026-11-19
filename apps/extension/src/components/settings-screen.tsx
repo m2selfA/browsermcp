@@ -7,12 +7,17 @@ import {
   sendBrowserControlMessage,
   useBrowserControl,
 } from "@browsermcp/extension-core/popup";
-import { RELAY_PORTS, isValidRelayPort } from "@browsermcp/protocol";
+import {
+  MAX_BROWSER_DESCRIPTION_LENGTH,
+  RELAY_PORTS,
+  isValidRelayPort,
+  normalizeBrowserDescription,
+} from "@browsermcp/protocol";
 
 import { Button, ErrorAlert } from "./ui";
 
 /**
- * The popup's settings: this browser's name, for agents when several browsers or profiles are connected, and the port of a server started with `--port`. Add a setting only when users can't do without it, since each one is more for every user to read
+ * The popup's profile name and purpose, plus the port of a server started with `--port`.
  */
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [view, refresh] = useBrowserControl();
@@ -49,6 +54,21 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             label={view.label}
             onSave={(label) =>
               run(() => sendBrowserControlMessage("setBrowserLabel", { label }))
+            }
+          />
+        </div>
+      )}
+      {view && (
+        <div className="border-t px-4 py-3">
+          <DescriptionSetting
+            key={view.description ?? ""}
+            description={view.description}
+            onSave={(description) =>
+              run(() =>
+                sendBrowserControlMessage("setBrowserDescription", {
+                  description,
+                }),
+              )
             }
           />
         </div>
@@ -117,9 +137,67 @@ function LabelSetting({
   );
 }
 
-/**
- * The port of a server started with `--port`: the default ports (`RELAY_PORTS`) are tried while it's empty
- */
+/** The profile purpose, shared with agents only after pairing. Empty clears it. */
+function DescriptionSetting({
+  description,
+  onSave,
+}: {
+  description: string | null;
+  onSave: (description: string | null) => Promise<void>;
+}) {
+  const [value, setValue] = useState(description ?? "");
+  const [saving, setSaving] = useState(false);
+  const normalized = normalizeBrowserDescription(value);
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await onSave(normalized);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <form onSubmit={save} className="space-y-2">
+      <label htmlFor="settings-description" className="block font-medium">
+        Profile description
+      </label>
+      <textarea
+        id="settings-description"
+        className="w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        rows={3}
+        placeholder="e.g. Research papers using my university account"
+        autoComplete="off"
+        aria-describedby="settings-description-help"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <p
+        id="settings-description-help"
+        className="text-xs text-muted-foreground"
+      >
+        Helps AI agents choose this profile. Saved locally in this profile and
+        shared after pairing. Up to {MAX_BROWSER_DESCRIPTION_LENGTH} characters;
+        whitespace is collapsed. Leave empty to clear.
+      </p>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground" aria-live="polite">
+          {Array.from(normalized ?? "").length}/{MAX_BROWSER_DESCRIPTION_LENGTH}{" "}
+          characters to save
+        </span>
+        <Button
+          type="submit"
+          variant="outline"
+          disabled={saving || normalized === description}
+        >
+          Save
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** The port of a server started with `--port`. */
 function PortSetting({
   relayPort,
   onSave,

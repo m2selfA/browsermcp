@@ -273,7 +273,7 @@ describe("the engine through the relay", () => {
 });
 
 describe("one browser through the relay", () => {
-  it("prints nothing about browsers: tab list, tab new and help as before", async () => {
+  it("discovers a single profile's purpose without changing tab output", async () => {
     const engine = createCommandEngine({ backend: relay.backend });
     engine.openSession({
       id: "s1",
@@ -290,14 +290,23 @@ describe("one browser through the relay", () => {
         .map((c) => (c.type === "text" ? c.text : ""))
         .join("");
     };
-    const out = await run(`tab new ${fixtures.url("/")}\ntab list\nhelp`);
+    extension.setDescription("文献检索");
+    await vi.waitUntil(
+      () => relay.backend.browsers()[0]!.description === "文献检索",
+    );
+    const out = await run(`tab new ${fixtures.url("/")}\ntab list`);
     const tabId = /tab (\d+)/.exec(out)![1];
     expect(out).toContain(`— tab ${tabId}\n`);
     expect(out).toMatch(
       new RegExp(`\\* ${tabId} "Home" — ${fixtures.url("/")} \\(yours\\)`),
     );
     expect(out).not.toMatch(/\[Chrome\]|browser list|Several browsers/);
-    expect(engine.tools("s1")[0]!.description).not.toContain("browser list");
+    expect(engine.tools("s1")[0]!.description).toContain("browser list");
+    expect(await run("help")).toContain("browser list | browser use");
+    expect(await run("browser list")).toContain('purpose: "文献检索"');
+    extension.setDescription(undefined);
+    await vi.waitUntil(() => !relay.backend.browsers()[0]!.description);
+    expect(await run("browser list")).not.toContain("purpose:");
     (engine as unknown as { dispose(): void }).dispose();
   });
 });
@@ -360,6 +369,82 @@ describe("several browsers through the relay", () => {
     await vi.waitUntil(() => released.length > 0);
     expect(released).toHaveLength(1);
     expect(await form.title()).toBe("Form");
+  });
+
+  it("keeps two purposes and simultaneous sessions isolated, rejecting ambiguous or offline targets", async () => {
+    extension.setLabel("Research");
+    extension.setDescription("University papers");
+    second.setDescription("QA staging");
+    await vi.waitUntil(
+      () =>
+        relay.backend.browsers()[0]!.label === "Research" &&
+        relay.backend.browsers()[1]!.description === "QA staging",
+    );
+    const engine = createCommandEngine({ backend: relay.backend });
+    const io = {
+      readFile: () => Promise.reject(new Error("no files")),
+      writeFile: () => Promise.reject(new Error("no files")),
+    };
+    for (const id of ["research", "qa"])
+      engine.openSession({
+        id,
+        app: { id: "pi", name: "Pi" },
+        capabilities: [],
+        io,
+      });
+    const run = async (id: string, commands: string) => {
+      const result = await engine.callTool(id, "browser", { commands });
+      return {
+        isError: !!result.isError,
+        text: result.content
+          .map((c) => (c.type === "text" ? c.text : ""))
+          .join(""),
+      };
+    };
+    try {
+      const list = await run("research", "browser list");
+      expect(list.text).toContain('purpose: "University papers"');
+      expect(list.text).toContain('purpose: "QA staging"');
+      const [a, b] = await Promise.all([
+        run(
+          "research",
+          `tab new ${fixtures.url("/form?research")} --browser b1\nfill #name Research\nget value #name`,
+        ),
+        run(
+          "qa",
+          `tab new ${fixtures.url("/form?qa")} --browser b2\nfill #name QA\nget value #name`,
+        ),
+      ]);
+      expect(a.isError, a.text).toBe(false);
+      expect(b.isError, b.text).toBe(false);
+      expect(a.text).toMatch(/\nResearch(?:\n|$)/);
+      expect(b.text).toContain("\nQA\n");
+      expect((await run("research", "get value #name")).text).toMatch(
+        /\nResearch(?:\n|$)/,
+      );
+      const count = relay.backend.tabs().length;
+      second.setLabel("Research");
+      await vi.waitUntil(
+        () => relay.backend.browsers()[1]!.label === "Research",
+      );
+      const ambiguous = await run("qa", "tab new --browser Research");
+      expect(ambiguous.isError).toBe(true);
+      expect(ambiguous.text).toMatch(/b1.*b2/);
+      expect(relay.backend.tabs()).toHaveLength(count);
+      // Description text is not a selector.
+      expect((await run("qa", 'browser use "QA staging"')).isError).toBe(true);
+      await second.disconnect();
+      await vi.waitUntil(() => !relay.backend.browsers()[1]!.connected);
+      await run("qa", "browser use b2");
+      const offline = await run("qa", "tab new");
+      expect(offline.isError).toBe(true);
+      expect(offline.text).toContain("disconnected");
+      expect((await run("research", "get value #name")).text).toMatch(
+        /\nResearch(?:\n|$)/,
+      );
+    } finally {
+      (engine as unknown as { dispose(): void }).dispose();
+    }
   });
 
   it("lets each session choose where its new tabs open, and names browsers in tab list", async () => {

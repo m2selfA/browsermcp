@@ -1403,11 +1403,45 @@ describe("this browser profile (several browsers on one daemon)", () => {
     expect((await again.control.getView()).label).toBeNull();
   });
 
-  it("sends neither the label nor focus before the user allowed the daemon's key", async () => {
+  it("keeps the description across worker restarts, reports edits, and clears it", async () => {
+    const key = await createDaemonKey();
+    const { ws, control } = await startPaired(key);
+    expect(await latestState(ws)).not.toHaveProperty("description");
+    const sent = events(ws, "state").length;
+    await control.setDescription("  文献检索\n Research  ");
+    expect(events(ws, "state")).toHaveLength(sent + 1);
+    expect((await latestState(ws)).description).toBe("文献检索 Research");
+    expect((await control.getView()).description).toBe("文献检索 Research");
+    await control.setDescription("😀".repeat(501));
+    expect((await latestState(ws)).description).toBe("😀".repeat(500));
+    await expect(
+      control.setDescription(42 as unknown as string),
+    ).rejects.toThrow("Invalid browser description");
+    expect((await control.getView()).description).toBe("😀".repeat(500));
+
+    stopServiceWorker();
+    const again = await start();
+    expect(again.ws.messages("hello")[0].state).not.toHaveProperty(
+      "description",
+    );
+    await welcome(again.ws, key);
+    await vi.waitFor(async () =>
+      expect((await latestState(again.ws)).description).toBe("😀".repeat(500)),
+    );
+    await again.control.setDescription("  ");
+    expect(await latestState(again.ws)).not.toHaveProperty("description");
+    expect((await again.control.getView()).description).toBeNull();
+    await again.control.setDescription("QA only");
+    await again.control.setDescription(null);
+    expect((await again.control.getView()).description).toBeNull();
+  });
+
+  it("sends neither label, description nor focus before pairing", async () => {
     chrome.addTab({ id: 1 });
     await lastFocusedAtItem.setValue(1000);
     const { ws, control } = await start();
     await control.setLabel("Personal");
+    await control.setDescription("Private account");
     expect(ws.messages("hello")[0].state).toEqual({
       tabs: [],
       paused: false,
@@ -1421,6 +1455,7 @@ describe("this browser profile (several browsers on one daemon)", () => {
       }),
     );
     await control.setLabel("Work");
+    await control.setDescription("QA only");
     expect(await latestState(ws)).toEqual({
       tabs: [],
       paused: false,
@@ -1430,6 +1465,7 @@ describe("this browser profile (several browsers on one daemon)", () => {
     await control.allow(key.publicKey);
     expect(await latestState(ws)).toMatchObject({
       label: "Work",
+      description: "QA only",
       lastFocusedAt: 1000,
     });
   });

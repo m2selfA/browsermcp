@@ -1,14 +1,16 @@
-# Browser MCP
+# Profile Browser MCP
+
+A local-use fork of [BrowserMCP/mcp](https://github.com/BrowserMCP/mcp), adding per-profile purpose descriptions to the existing multi-profile control. Use this fork's built extension **and** MCP server for the added functionality. [Multi-profile and Pi setup (中文)](docs/profiles.md).
 
 Browser MCP lets AI apps (Claude Code, Cursor, VS Code, Codex, Claude Desktop…) use your own Chrome: your signed-in sites, your profile, in tabs of their own. Everything runs on your computer.
 
-- **Website and docs**: [browsermcp.io](https://browsermcp.io), [docs](https://browsermcp.io/docs)
-- **Extension**: [Chrome Web Store](https://chromewebstore.google.com/detail/bjfgambnhccakkhmkepdoekmckoijdlc), or [build it yourself](#build-it-yourself)
-- **MCP server**: [`@browsermcp/mcp`](https://www.npmjs.com/package/@browsermcp/mcp) on npm
+- **Upstream website and docs**: [browsermcp.io](https://browsermcp.io), [docs](https://browsermcp.io/docs)
+- **Fork extension and server**: [build them together](#build-it-yourself); set each profile's name and purpose in the popup's Settings.
+- **Upstream releases**: [Chrome Web Store](https://chromewebstore.google.com/detail/bjfgambnhccakkhmkepdoekmckoijdlc) and [`@browsermcp/mcp`](https://www.npmjs.com/package/@browsermcp/mcp). These are not releases of this fork.
 
 ## How it works
 
-Each AI app runs the MCP server (`npx @browsermcp/mcp@latest`), a small process that starts one daemon per user and forwards the app's `browser` tool calls to it. The daemon drives the browser's tabs with Playwright, through the extension: a thin `chrome.debugger` relay that only talks to the daemon on `127.0.0.1`, and only after you click **Allow** in its popup once per computer, having checked that its six-digit code matches the one your AI app shows. The extension enforces its own rules whatever the daemon asks: no incognito tabs unless you turned on **Allow in Incognito** for the extension in Chrome, no browser or extension pages, and nothing while you've pressed **Stop**.
+Each AI app runs the locally built MCP server (`node packages/mcp/dist/index.js`), a small process that starts one daemon per user and forwards the app's `browser` tool calls to it. The daemon drives the browser's tabs with Playwright, through the extension: a thin `chrome.debugger` relay that only talks to the daemon on `127.0.0.1`, and only after you click **Allow** in its popup once per computer, having checked that its six-digit code matches the one your AI app shows. The extension enforces its own rules whatever the daemon asks: no incognito tabs unless you turned on **Allow in Incognito** for the extension in Chrome, no browser or extension pages, and nothing while you've pressed **Stop**.
 
 | Folder                    | Package                      |                                                                                                                           |
 | ------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -26,13 +28,13 @@ The Chrome Web Store version updates itself. A build you load yourself doesn't: 
 1. Build the extension and the server:
 
    ```sh
-   git clone https://github.com/BrowserMCP/mcp.git browsermcp
+   git clone --branch feat/profile-descriptions https://github.com/m2selfA/browsermcp.git browsermcp
    cd browsermcp
-   pnpm install
+   pnpm install --frozen-lockfile
    pnpm build
    ```
 
-2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick `apps/extension/.output/chrome-mv3`. It's called "Browser MCP (self-built)". If the Chrome Web Store's Browser MCP is installed in the same profile, turn it off, or both would connect to the server as two browsers. Other Chrome profiles with Browser MCP connect too: agents can use tabs in each.
+2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick `apps/extension/.output/chrome-mv3`. It's called "Profile Browser MCP (self-built)". If the Chrome Web Store's Browser MCP is installed in the same profile, turn it off, or both would connect to the server as two browsers. Other Chrome profiles with Browser MCP connect too: agents can use tabs in each.
 3. In your AI app's MCP config, run the server you built instead of the one on npm:
 
    ```json
@@ -46,7 +48,7 @@ The Chrome Web Store version updates itself. A build you load yourself doesn't: 
    }
    ```
 
-   `npx @browsermcp/mcp@latest` (the docs' setup) works with this extension too: it's the same server, published from this repo.
+   The upstream npm server is protocol-compatible but does not expose this fork's profile descriptions. Point all MCP clients at this local build. Workspace package names are retained for upstream compatibility; this fork's server is private and not published to npm.
 
 4. Restart the AI app and ask it to do something in the browser. The first time, the extension's popup asks you to **Allow** the server on this computer: check that its code matches the one the AI app shows.
 
@@ -58,11 +60,11 @@ Only for a self-built extension: the Chrome Web Store version updates itself.
 
 ```sh
 git pull
-pnpm install
+pnpm install --frozen-lockfile
 pnpm build
 ```
 
-Then click the reload button on "Browser MCP (self-built)" in `chrome://extensions`, and restart your AI apps if they run the server from this folder. The extension and the server tell you when the other side is too old for them.
+Then click the reload button on "Profile Browser MCP (self-built)" in `chrome://extensions`, and restart your AI apps if they run the server from this folder. The extension and the server tell you when the other side is too old for them.
 
 ## Development
 

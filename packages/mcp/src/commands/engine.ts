@@ -687,7 +687,10 @@ class Engine implements CommandEngine {
           : browser.pairing === "pending"
             ? "waiting for Allow in its popup"
             : `${browser.tabs} tab${browser.tabs === 1 ? "" : "s"}${browser.paused ? ", paused" : ""}`;
-        return `${browser.id === target ? "*" : " "} ${browser.id} ${JSON.stringify(browser.label)} — ${status}`;
+        const purpose = browser.description
+          ? ` — purpose: ${JSON.stringify(browser.description)}`
+          : "";
+        return `${browser.id === target ? "*" : " "} ${browser.id} ${JSON.stringify(browser.label)} — ${status}${purpose}`;
       })
       .join("\n");
   }

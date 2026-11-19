@@ -21,6 +21,11 @@ export type BrowserControlMessages = {
   setRelayPort: { input: { port: number | null }; output: void };
   /** Names this browser profile for agents when several are connected (`ExtensionState.label`), or unsets the name with `null` or an empty one. Trimmed and capped (`normalizeBrowserLabel()`) */
   setBrowserLabel: { input: { label: string | null }; output: void };
+  /** Sets or clears this profile's purpose. Only the popup may change it. */
+  setBrowserDescription: {
+    input: { description: string | null };
+    output: void;
+  };
   /** Makes a tab active and focuses its window */
   switchToTab: { input: { tabId: number }; output: void };
 };
@@ -89,6 +94,8 @@ export function handleBrowserControlMessages(
     allowDaemon: ({ publicKey }, sender) => fromPopup(sender).allow(publicKey),
     setRelayPort: ({ port }, sender) => fromPopup(sender).setRelayPort(port),
     setBrowserLabel: ({ label }, sender) => fromPopup(sender).setLabel(label),
+    setBrowserDescription: ({ description }, sender) =>
+      fromPopup(sender).setDescription(description),
     switchToTab: ({ tabId }, sender) => fromPopup(sender).switchToTab(tabId),
   };
 

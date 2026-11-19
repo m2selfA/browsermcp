@@ -13,6 +13,7 @@ import {
   isValidBrowserId,
   isValidRelayPort,
   pairingRequiredMessage,
+  normalizeBrowserDescription,
 } from "@browsermcp/protocol";
 
 import { normalizeBrowserLabel } from "../browser-label";
@@ -20,6 +21,7 @@ import {
   appGroupsItem,
   browserIdItem,
   browserLabelItem,
+  browserDescriptionItem,
   connectionStatusItem,
   lastActiveAppItem,
   lastFocusedAtItem,
@@ -727,21 +729,40 @@ export class BrowserControl {
     await this.#sendState();
   }
 
+  /** Changes the purpose locally and sends it only to the paired daemon. */
+  async setDescription(description: string | null): Promise<void> {
+    if (description !== null && typeof description !== "string") {
+      throw new Error("Invalid browser description");
+    }
+    await browserDescriptionItem.setValue(
+      normalizeBrowserDescription(description),
+    );
+    await this.#sendState();
+  }
+
   async switchToTab(tabId: number): Promise<void> {
     await focusTab(await browser.tabs.get(tabId));
   }
 
   /** What the popup shows */
   async getView(): Promise<BrowserControlView> {
-    const [connection, legacyServer, paused, groups, relayPort, label] =
-      await Promise.all([
-        connectionStatusItem.getValue(),
-        legacyServerItem.getValue(),
-        pausedItem.getValue(),
-        appGroupsItem.getValue(),
-        relayPortItem.getValue(),
-        browserLabelItem.getValue(),
-      ]);
+    const [
+      connection,
+      legacyServer,
+      paused,
+      groups,
+      relayPort,
+      label,
+      description,
+    ] = await Promise.all([
+      connectionStatusItem.getValue(),
+      legacyServerItem.getValue(),
+      pausedItem.getValue(),
+      appGroupsItem.getValue(),
+      relayPortItem.getValue(),
+      browserLabelItem.getValue(),
+      browserDescriptionItem.getValue(),
+    ]);
     const tabs = await browser.tabs.query({});
     const tabsById = new Map(tabs.map((tab) => [tab.id, tab]));
 
@@ -774,23 +795,27 @@ export class BrowserControl {
       paused,
       relayPort,
       label,
+      description: normalizeBrowserDescription(description),
       apps,
     };
   }
 }
 
-/** What a paired daemon's `state` says about this browser profile: its name and when it was last focused, each only once there is one */
+/** Profile metadata sent only after pairing: name, purpose and last focus, omitting unset values. */
 async function getProfileState(): Promise<
-  Pick<ExtensionState, "label" | "lastFocusedAt">
+  Pick<ExtensionState, "label" | "description" | "lastFocusedAt">
 > {
-  const [stored, lastFocusedAt] = await Promise.all([
+  const [stored, storedDescription, lastFocusedAt] = await Promise.all([
     browserLabelItem.getValue(),
+    browserDescriptionItem.getValue(),
     lastFocusedAtItem.getValue(),
   ]);
   // Normalized again, in case it was set some other way (the service worker's console)
   const label = normalizeBrowserLabel(stored);
+  const description = normalizeBrowserDescription(storedDescription);
   return {
     ...(label && { label }),
+    ...(description && { description }),
     ...(lastFocusedAt !== null && { lastFocusedAt }),
   };
 }

@@ -1,12 +1,14 @@
 # Contributing
 
-Thanks for helping with Browser MCP. Bug reports, fixes and improvements are welcome.
+Thanks for helping with Profile Browser MCP. Bug reports, fixes and improvements are welcome.
+
+This is a local-use fork of [BrowserMCP/mcp](https://github.com/BrowserMCP/mcp). Build its extension and server together as described in [the profile guide](docs/profiles.md). This fork does not publish the official npm package or Chrome Web Store extension.
 
 ## Before you start
 
-- **Bugs**: open an issue with the versions of the server (`npx @browsermcp/mcp@latest --version`) and the extension, your browser and operating system, and the steps to reproduce it. For a security problem, follow [SECURITY.md](SECURITY.md) instead.
+- **Bugs**: open an issue with the versions of the locally built server (`node packages/mcp/dist/index.js --version`) and the extension, your browser and operating system, and the steps to reproduce it. For a security problem, follow [SECURITY.md](SECURITY.md) instead.
 - **Features and larger changes**: open an issue first so we can agree on the approach. Browser MCP gives AI apps control of someone's own signed-in browser, so changes to what they can reach, to pairing or to the protocol get a careful look, and some won't fit.
-- **Two builds from one source**: this repo is the open-source core of Browser MCP. The Chrome Web Store build adds things that aren't open (its popup in many languages, analytics and the review prompt) on top of `packages/extension-core` through hooks. Your change is merged here and ships in both.
+- **Upstream builds**: the original project's Chrome Web Store build adds its own popup, analytics and review prompt through `packages/extension-core` hooks. Changes in this fork are not automatically merged or shipped upstream.
 
 ## Setting up
 
@@ -46,7 +48,7 @@ It uses random ports and a temporary `BROWSER_MCP_HOME`, so it never touches you
 - Add or update tests next to the code (Vitest). Fix bugs with a test that fails without the fix.
 - Protocol changes go into both sides at once: the daemon (`packages/mcp/src/relay/`) and `packages/extension-core`. Nothing may send data anywhere on its own: analytics and the like belong in the closed store build, not here.
 - Don't import anything but `@browsermcp/*` packages and npm packages, and don't add dependencies without a reason.
-- A maintainer doesn't merge the pull request on GitHub. Browser MCP's other builds are made from the same source, so the change is copied there, reviewed and merged, and comes back to this repo as a commit that credits you as a co-author. Your pull request is then closed with a link to that commit.
+- For pull requests submitted to `BrowserMCP/mcp` upstream, a maintainer doesn't merge the pull request on GitHub. Upstream's other builds are made from the same source, so the change is copied there, reviewed and merged, and comes back to this repo as a commit that credits you as a co-author. Your pull request is then closed with a link to that commit.
 
 ## License
 
