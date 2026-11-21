@@ -107,6 +107,13 @@ const progress: {
 class CheckFailed extends Error {}
 
 try {
+  await section(
+    "the unnamed profile keeps the default toolbar tooltip",
+    async () => {
+      await expectProfileTitle(null);
+    },
+  );
+
   // Old versions: a 0.1.x server (a fake one speaking its WebSocket protocol, on a random port rather than 9009) gets `LEGACY_SERVER_MESSAGE` for every command
   await section("an old 0.1.x server gets the update message", async () => {
     const legacy = await startFakeLegacyServer();
@@ -636,6 +643,13 @@ get text #out`,
     "a second Chrome profile: tab list shows both, tab select across them",
     async () => {
       const firstPopup = await openPopup();
+      await saveProfileMetadata(
+        firstPopup,
+        "Tooltip",
+        "文".repeat(31),
+        `Tooltip - ${"文".repeat(29)}…`,
+      );
+      await saveProfileMetadata(firstPopup, "NameOnly", "");
       await saveProfileMetadata(firstPopup, "Research", "University papers");
       await firstPopup.close();
       const firstTab = await currentTabId(alpha);
@@ -668,6 +682,7 @@ get text #out`,
         // This profile hasn't paired with the daemon: it waits for Allow, without stopping agents in the first
         const popup = await openPopup({ context: secondContext });
         await saveProfileMetadata(popup, "QA", "QA staging account");
+        await expectProfileTitle("Research - University papers");
         await popup.getByText(/^Code: /).waitFor({ timeout: 20_000 });
         const pendingProfiles = await call(alpha, "browser list");
         expect(
@@ -779,6 +794,8 @@ get text #out`,
     );
     try {
       const restartedContext = restartedBrowser.contexts()[0]!;
+      // Restored on startup, before any popup or Settings page is opened.
+      await expectProfileTitle("QA - QA staging account", restartedContext);
       const popup = await openPopup({ context: restartedContext });
       await popup
         .getByText(/^Connected/)
@@ -1182,6 +1199,34 @@ async function badge() {
   });
 }
 
+/** Reads Chrome's actual toolbar tooltip, including profile-local state. */
+async function expectProfileTitle(
+  expectedTitle: string | null,
+  inContext = context,
+) {
+  let observedTitle = "";
+  await waitFor(
+    `the toolbar tooltip ${expectedTitle ?? "(default)"}`,
+    async () => {
+      const { title, defaultTitle } = await inWorker(
+        async () => {
+          const { chrome } = globalThis as unknown as { chrome: Chrome };
+          const manifest = chrome.runtime.getManifest();
+          return {
+            title: await chrome.action.getTitle({}),
+            defaultTitle: manifest.action?.default_title ?? manifest.name,
+          };
+        },
+        undefined,
+        inContext,
+      );
+      observedTitle = title;
+      return title === (expectedTitle ?? defaultTitle);
+    },
+  );
+  log(`Toolbar tooltip: ${JSON.stringify(observedTitle)}`);
+}
+
 async function tabCount() {
   return await inWorker(async () => {
     const { chrome } = globalThis as unknown as { chrome: Chrome };
@@ -1210,6 +1255,7 @@ async function saveProfileMetadata(
   popup: Page,
   label: string,
   description: string,
+  expectedTitle = description ? `${label} - ${description}` : label,
 ) {
   await popup.getByRole("button", { name: "Settings", exact: true }).click();
   const nameField = popup.getByLabel("Browser name", { exact: true });
@@ -1228,6 +1274,7 @@ async function saveProfileMetadata(
     .filter({ has: descriptionField })
     .getByRole("button", { name: "Save", exact: true })
     .click();
+  let observedMetadata: Record<string, unknown> = {};
   await waitFor("profile metadata saved", async () => {
     const saved = await inWorker(
       async () => {
@@ -1237,11 +1284,16 @@ async function saveProfileMetadata(
       undefined,
       popup.context(),
     );
+    observedMetadata = saved;
     return (
-      saved.browserLabel === label && saved.browserDescription === description
+      saved.browserLabel === label &&
+      (saved.browserDescription ?? null) === (description || null)
     );
   });
+  log(`Profile metadata: ${JSON.stringify(observedMetadata)}`);
+  await expectProfileTitle(expectedTitle, popup.context());
   await popup.getByRole("button", { name: "Back", exact: true }).click();
+  await popup.getByText(expectedTitle, { exact: true }).waitFor();
 }
 
 async function openPopup(

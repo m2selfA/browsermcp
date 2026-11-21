@@ -5,7 +5,7 @@ import { ArrowLeftIcon } from "lucide-react";
 import {
   normalizeBrowserLabel,
   sendBrowserControlMessage,
-  useBrowserControl,
+  type BrowserControlView,
 } from "@browsermcp/extension-core/popup";
 import {
   MAX_BROWSER_DESCRIPTION_LENGTH,
@@ -19,8 +19,15 @@ import { Button, ErrorAlert } from "./ui";
 /**
  * The popup's profile name and purpose, plus the port of a server started with `--port`.
  */
-export function SettingsScreen({ onBack }: { onBack: () => void }) {
-  const [view, refresh] = useBrowserControl();
+export function SettingsScreen({
+  onBack,
+  view,
+  refresh,
+}: {
+  onBack: () => void;
+  view: BrowserControlView | null;
+  refresh: () => Promise<void>;
+}) {
   const [error, setError] = useState<string | null>(null);
 
   const run = async (action: () => Promise<void>) => {
@@ -130,8 +137,8 @@ function LabelSetting({
         </Button>
       </div>
       <p id="settings-label-help" className="text-xs text-muted-foreground">
-        Names this browser to AI agents when several browsers or profiles are
-        connected.
+        Shown with a short profile description when you hover over the toolbar
+        icon. Also identifies this profile to AI agents.
       </p>
     </form>
   );

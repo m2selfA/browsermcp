@@ -7,7 +7,7 @@ import {
   sendBrowserControlMessage,
   TAB_GROUP_HEX,
   TAB_GROUP_TEXT,
-  useBrowserControl,
+  type BrowserControlView,
 } from "@browsermcp/extension-core/popup";
 
 import { APP_NAME, UPDATE_EXTENSION_URL, UPDATE_SERVER_URL } from "./links";
@@ -16,8 +16,13 @@ import { Alert, Button, ErrorAlert, openPage } from "./ui";
 /**
  * The popup's browser control: the connection to the Browser MCP server (or what to update), **Allow** for a new server, the AI apps using the browser with their tabs, and **Stop** / **Resume**
  */
-export function BrowserControlPanel() {
-  const [view, refresh] = useBrowserControl();
+export function BrowserControlPanel({
+  view,
+  refresh,
+}: {
+  view: BrowserControlView | null;
+  refresh: () => Promise<void>;
+}) {
   const [error, setError] = useState<string | null>(null);
 
   if (!view) {

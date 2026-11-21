@@ -125,7 +125,11 @@ export function installFakeChrome() {
   });
 
   Object.assign(fakeBrowser.runtime, {
-    getManifest: () => ({ version: "2.0.0", manifest_version: 3 }),
+    getManifest: () => ({
+      name: "Browser MCP",
+      version: "2.0.0",
+      manifest_version: 3,
+    }),
   });
   let incognitoAccess = false;
   Object.assign(fakeBrowser.extension, {

@@ -14,4 +14,5 @@ export {
   requirePopupSender,
 } from "./messages";
 export * from "./browser-label";
+export * from "./profile-title";
 export * from "./types";

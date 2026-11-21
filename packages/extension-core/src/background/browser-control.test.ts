@@ -12,6 +12,8 @@ import {
 
 import {
   browserIdItem,
+  browserLabelItem,
+  browserDescriptionItem,
   connectionStatusItem,
   lastFocusedAtItem,
   pausedItem,
@@ -1371,6 +1373,101 @@ describe("this browser profile (several browsers on one daemon)", () => {
     const { browserId } = ws.messages("hello")[0];
     expect(isValidBrowserId(browserId)).toBe(true);
     expect(await browserIdItem.getValue()).toBe(browserId);
+  });
+
+  it("shows the saved profile name in the toolbar tooltip without a daemon, across worker restarts", async () => {
+    await browserLabelItem.setValue("研究 😀");
+    await browserDescriptionItem.setValue("文献检索");
+    await start({});
+    await vi.waitFor(async () =>
+      expect(await fakeBrowser.action.getTitle({})).toBe("研究 😀 - 文献检索"),
+    );
+
+    stopServiceWorker();
+    // Emulate action state being reset before the worker starts.
+    await fakeBrowser.action.setTitle({ title: "Browser MCP" });
+    await start({});
+    await vi.waitFor(async () =>
+      expect(await fakeBrowser.action.getTitle({})).toBe("研究 😀 - 文献检索"),
+    );
+  });
+
+  it("updates the toolbar tooltip on save and restores the extension name when cleared", async () => {
+    const { control } = await start({});
+    await vi.waitFor(async () =>
+      expect(await fakeBrowser.action.getTitle({})).toBe("Browser MCP"),
+    );
+    await control.setLabel("  Work\n  QA 😀  ");
+    expect(await fakeBrowser.action.getTitle({})).toBe("Work QA 😀");
+    expect(await badgeText()).toBe("");
+    await control.setDescription("  University\n papers  ");
+    expect(await fakeBrowser.action.getTitle({})).toBe(
+      "Work QA 😀 - University papers",
+    );
+    await control.setLabel("Research");
+    expect(await fakeBrowser.action.getTitle({})).toBe(
+      "Research - University papers",
+    );
+    await control.setDescription(null);
+    expect(await fakeBrowser.action.getTitle({})).toBe("Research");
+    expect(
+      (await fakeBrowser.storage.local.get("browserDescription"))
+        .browserDescription,
+    ).toBeUndefined();
+
+    await control.setLabel("  ");
+    expect(await fakeBrowser.action.getTitle({})).toBe("Browser MCP");
+    await control.setLabel("Research");
+    await control.setLabel(null);
+    expect(await fakeBrowser.action.getTitle({})).toBe("Browser MCP");
+    await control.setDescription("QA only");
+    expect(await fakeBrowser.action.getTitle({})).toBe("QA only");
+    await control.setDescription("  ");
+    expect(await fakeBrowser.action.getTitle({})).toBe("Browser MCP");
+  });
+
+  it("caps the toolbar description at 30 Unicode characters without changing the saved description", async () => {
+    const { control } = await start({});
+    await control.setLabel("Research");
+    for (const length of [29, 30]) {
+      await control.setDescription("文".repeat(length));
+      expect(await fakeBrowser.action.getTitle({})).toBe(
+        `Research - ${"文".repeat(length)}`,
+      );
+    }
+    for (const character of ["文", "😀"]) {
+      const description = character.repeat(31);
+      await control.setDescription(description);
+      const title = await fakeBrowser.action.getTitle({});
+      expect(title).toBe(`Research - ${character.repeat(29)}…`);
+      expect(Array.from(title.slice("Research - ".length))).toHaveLength(30);
+      expect((await control.getView()).description).toBe(description);
+    }
+  });
+
+  it("preserves the manifest's default tooltip when naming or clearing a profile", async () => {
+    const manifest = fakeBrowser.runtime.getManifest();
+    const getManifest = vi.spyOn(fakeBrowser.runtime, "getManifest");
+    getManifest.mockReturnValue({
+      ...manifest,
+      action: { default_title: "Custom browser control" },
+    });
+    try {
+      const { control } = await start({});
+      await vi.waitFor(async () =>
+        expect(await fakeBrowser.action.getTitle({})).toBe(
+          "Custom browser control",
+        ),
+      );
+      await control.setLabel("Work");
+      expect(await fakeBrowser.action.getTitle({})).toBe("Work");
+      await control.setLabel(null);
+      expect(await fakeBrowser.action.getTitle({})).toBe(
+        "Custom browser control",
+      );
+    } finally {
+      getManifest.mockRestore();
+    }
   });
 
   it("sends the label in state, at once when it changes", async () => {

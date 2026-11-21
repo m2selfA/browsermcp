@@ -17,6 +17,7 @@ import {
 } from "@browsermcp/protocol";
 
 import { normalizeBrowserLabel } from "../browser-label";
+import { formatProfileTitle } from "../profile-title";
 import {
   appGroupsItem,
   browserIdItem,
@@ -240,6 +241,7 @@ export class BrowserControl {
     if (status.state === "connected") {
       await connectionStatusItem.setValue({ state: "searching" });
     }
+    await this.#updateTitle();
     await Promise.all([
       this.debugger.detachStale().catch((error: unknown) => {
         console.warn("Couldn't detach from tabs", error);
@@ -662,6 +664,22 @@ export class BrowserControl {
     };
   }
 
+  /** A concise local name and description, even without a daemon. */
+  async #updateTitle(): Promise<void> {
+    const [label, description] = await Promise.all([
+      browserLabelItem.getValue(),
+      browserDescriptionItem.getValue(),
+    ]);
+    const manifest = browser.runtime.getManifest();
+    await browser.action.setTitle({
+      title: formatProfileTitle(
+        label,
+        description,
+        manifest.action?.default_title || manifest.name,
+      ),
+    });
+  }
+
   async #updateBadge(): Promise<void> {
     const [legacyServer, lastActiveApp, groups] = await Promise.all([
       legacyServerItem.getValue(),
@@ -726,6 +744,7 @@ export class BrowserControl {
       throw new Error("Invalid browser name");
     }
     await browserLabelItem.setValue(normalizeBrowserLabel(label));
+    await this.#updateTitle();
     await this.#sendState();
   }
 
@@ -737,6 +756,7 @@ export class BrowserControl {
     await browserDescriptionItem.setValue(
       normalizeBrowserDescription(description),
     );
+    await this.#updateTitle();
     await this.#sendState();
   }
 
